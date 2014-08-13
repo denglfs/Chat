@@ -30,6 +30,12 @@ private:
             QString srcIP,\
             QString srcHostName,\
             QString data);
+    //返回用户的列表
+    void sendUserList(\
+            MessageType type,\
+            QString destIP,\
+            QString srcIP,\
+            QString srcHostName);
 private slots:
     void on_tcpSocket_readyRead();
 };
