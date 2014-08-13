@@ -33,16 +33,12 @@ private:
     QTcpSocket * xsock;
     void closeEvent(QCloseEvent *);
     Ui::MainWindow *ui;
-    QUdpSocket * udpSocket;
-    QTcpServer * tcpServer;
     qint16 port;
     QString filename;
     Sender * server;
-    int counter;
     QVector<Recorder> recoders;
 private slots:
     void processPendingDatagrams();
-   //    void newXchat();
     void on_sendButton_clicked();
     void getFileName(QString);
     void on_sendFileBtn_clicked();
@@ -52,7 +48,6 @@ private slots:
     void on_xsock_readyRead();
 
 signals:
-    void exitSignal();
     void newMessageSignal(Recorder  _recoders);
 };
 

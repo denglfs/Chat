@@ -6,6 +6,7 @@
 #include <QTcpSocket>
 #include <QByteArray>
 #include <QDateTime>
+#include <QKeyEvent>
 #include "Structor.h"
 
 namespace Ui {
@@ -29,13 +30,12 @@ private:
     QVector<Recorder> *recoders;
     QString getIP();
     void closeEvent(QCloseEvent *);
+    bool eventFilter(QObject *obj, QEvent *e);
 private slots:
     void on_sendBtn_clicked();
-    void on_closeBtn_clicked();
     void displayError (QAbstractSocket::SocketError);
 public slots:
     void readMessage(Recorder _recoders);
-
 };
 
 #endif // CHAT_H

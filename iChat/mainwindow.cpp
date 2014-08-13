@@ -16,44 +16,25 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-
     xsock = new QTcpSocket(this);
     QString ip = getIP();
+    //QString ip = "192.168.1.100";
+    qDebug()<<"ip="<<ip;
     xsock->connectToHost(QHostAddress(ip),5001);
     connect(xsock,SIGNAL(readyRead()),\
             this,SLOT(on_xsock_readyRead()));
-
     QByteArray data;
     QDataStream out(&data,QIODevice::WriteOnly);
     out<<NewParticipant<<getIP()<<QHostInfo::localHostName()<<tr("127.0.0.1");
     xsock->write(data);
-
-
     setWindowIcon(QIcon(":/new/prefix1/icon.ico"));
     setWindowTitle("iChat");
 
-    udpSocket = new QUdpSocket(this);
-    port = 15254;
-    udpSocket->bind(port,QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint);
-
-    tcpServer = new QTcpServer(this);
-    tcpServer->listen(QHostAddress::Any,port+1);
-    connect(tcpServer,SIGNAL(newConnection()),\
-            this,SLOT(newXchat()));
-
-    server = new Sender(this);
-    //双击用户弹出私聊窗口
-    connect(ui->userTableWidget,SIGNAL(itemDoubleClicked(QTableWidgetItem*)),
-            this,SLOT(on_xChat_clicked()));
-    //获取要发出文件的名字
+    server = new Sender();
     connect(server,SIGNAL(sendFileName(QString)),\
             this,SLOT(getFileName(QString)));
-    //接收得到消息的处理方式
-    connect(udpSocket,SIGNAL(readyRead()),\
-            this,SLOT(processPendingDatagrams()));
-    //发送上线消息
-
-    counter = 0;
+    connect(ui->userTableWidget,SIGNAL(itemDoubleClicked(QTableWidgetItem*)),\
+            this,SLOT(on_xChat_clicked()));
 }
 
 void MainWindow::getFileName(QString name)
@@ -74,10 +55,11 @@ void MainWindow::sendMessage(MessageType type, QString destIP)
     QString address = getIP();
     //消息类型，用户名，主机名必须写入
     out<<(int)type<<address<<localHostName<<destIP;
-qDebug()<<type<<"+"<<address<<"+"<<localHostName<<"+"<<destIP;
+    qDebug()<<type<<"+"<<address<<"+"<<localHostName<<"+"<<destIP;
     switch (type)
     {
     case Message:
+    {
         if(ui->messageTextEdit->toPlainText() == "")
         {
             QMessageBox::warning(0,tr("waring"),tr("must send one word"),QMessageBox::Ok);
@@ -87,6 +69,7 @@ qDebug()<<type<<"+"<<address<<"+"<<localHostName<<"+"<<destIP;
         out<<getMessaget();
         ui->messageBrowser->verticalScrollBar()->setValue(ui->messageBrowser->verticalScrollBar()->maximum());
         break;
+    }
     case NewParticipant:
         break;
     case ReplyNewParticipant:
@@ -101,7 +84,6 @@ qDebug()<<type<<"+"<<address<<"+"<<localHostName<<"+"<<destIP;
         break;
     }
     case Refuse:
-        out<<destIP;
         break;
     default:
         break;
@@ -150,62 +132,61 @@ void MainWindow::on_xsock_readyRead()
 //接收到消息后的处理方式
 void MainWindow::processPendingDatagrams()
 {
-    while(udpSocket->hasPendingDatagrams())
-    {
-        QByteArray datagram;
-        datagram.resize(udpSocket->pendingDatagramSize());
-        udpSocket->readDatagram(datagram.data(),datagram.size());
-        QDataStream in(&datagram,QIODevice::ReadOnly);
-        int messageType;
-        in>>messageType;
-        QString UserName,localHostName,Ipaddress;//对方的：用户名，主机名，本机IP
-        QString Time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-        switch (messageType)
-        {
-        case Message:
-        {
-            QString message;
-            in>>UserName>>localHostName>>Ipaddress>>message;
-            if((counter++)%2)
-                ui->messageBrowser->setTextColor(Qt::blue);
-            else
-                ui->messageBrowser->setTextColor(Qt::red);
-            ui->messageBrowser->setCurrentFont(QFont("Times new Roman",12));
-            ui->messageBrowser->append("["+localHostName+"]   "+Time);
-            ui->messageBrowser->append(message);
-            break;
-        }
-         case NewParticipant:
-            in>>UserName>>localHostName>>Ipaddress;
-            break;
-        case ReplyNewParticipant:
-            in>>UserName>>localHostName>>Ipaddress;
-            break;
-        case ParticipantLeft:
-            in>>UserName>>localHostName;
-            participantLeft(UserName,localHostName,Time);
-            break;
-        case FileName:
-        {
-            in>>UserName>>localHostName>>Ipaddress;
-            QString clientAddress,filename;
-            in>>clientAddress>>filename;
-            hasPendingFile(UserName,Ipaddress,clientAddress,filename);
-
-            break;
-        }
-        case Refuse:
-        {
-            in>>UserName>>localHostName;
-            QString serverAddress;
-            in>>serverAddress;
-            QString ipAddress = getIP();
-            if(ipAddress == serverAddress)
-            {
-                server->refused();
-            }
-            break;
-        }
+//    while(udpSocket->hasPendingDatagrams())
+//    {
+//        QByteArray datagram;
+//        datagram.resize(udpSocket->pendingDatagramSize());
+//        udpSocket->readDatagram(datagram.data(),datagram.size());
+//        QDataStream in(&datagram,QIODevice::ReadOnly);
+//        int messageType;
+//        in>>messageType;
+//        QString UserName,localHostName,Ipaddress;//对方的：用户名，主机名，本机IP
+//        QString Time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+//        switch (messageType)
+//        {
+//        case Message:
+//        {
+//            QString message;
+//            in>>UserName>>localHostName>>Ipaddress>>message;
+//            if((counter++)%2)
+//                ui->messageBrowser->setTextColor(Qt::blue);
+//            else
+//                ui->messageBrowser->setTextColor(Qt::red);
+//            ui->messageBrowser->setCurrentFont(QFont("Times new Roman",12));
+//            ui->messageBrowser->append("["+localHostName+"]   "+Time);
+//            ui->messageBrowser->append(message);
+//            break;
+//        }
+//         case NewParticipant:
+//            in>>UserName>>localHostName>>Ipaddress;
+//            break;
+//        case ReplyNewParticipant:
+//            in>>UserName>>localHostName>>Ipaddress;
+//            break;
+//        case ParticipantLeft:
+//            in>>UserName>>localHostName;
+//            participantLeft(UserName,localHostName,Time);
+//            break;
+//        case FileName:
+//        {
+//            in>>UserName>>localHostName>>Ipaddress;
+//            QString clientAddress,filename;
+//            in>>clientAddress>>filename;
+//            hasPendingFile(UserName,Ipaddress,clientAddress,filename);
+//            break;
+//        }
+//        case Refuse:
+//        {
+//            in>>UserName>>localHostName;
+//            QString serverAddress;
+//            in>>serverAddress;
+//            QString ipAddress = getIP();
+//            if(ipAddress == serverAddress)
+//            {
+//                server->refused();
+//            }
+//            break;
+//        }
 //        case xChat:
 //        {
 //            in>>UserName>>localHostName>>Ipaddress;
@@ -218,14 +199,13 @@ void MainWindow::processPendingDatagrams()
 //                chat->m_connect(Ipaddress);
 //                chat->setTitle(QHostInfo::localHostName(),localHostName);
 //                chat->show();
-//                connect(this,SIGNAL(exitSignal()),\
-//                        chat,SLOT(close()));
+//                connect(this,SIGNAL(exitSignal()) chat,SLOT(close()));
 //            }
 //        }
-        default:
-            break;
-        }
-    }
+//        default:
+//            break;
+//        }
+//    }
 }
 
 void MainWindow::hasPendingFile(QString userName, QString serverAddress, QString clientAddress, QString filename)
@@ -344,44 +324,23 @@ void MainWindow::on_xChat_clicked()
 
 void MainWindow::on_exitButton_clicked()
 {
+    //发送用户离开消息
     QByteArray data;
     QDataStream out(&data,QIODevice::WriteOnly);
     out<<ParticipantLeft<<getIP()<<QHostInfo::localHostName()<<tr("127.0.0.1");
     xsock->write(data);
 
-
     this->hide();
     delete server;
-    delete udpSocket;
     close();
 }
 void MainWindow::closeEvent(QCloseEvent *)
 {
-    exitSignal();
     on_exitButton_clicked();
 
 }
-//void MainWindow::newXchat()
-//{
-//    QTcpSocket * tcpSocket = tcpServer->nextPendingConnection();
-//    Chat * chat = new Chat(NULL);
-//    chat->setSenderSocket(tcpSocket);
-
-//    int row = ui->userTableWidget->currentRow();
-//    QString clientName = ui->userTableWidget->item(row,1)->text();
-//    chat->setTitle(QHostInfo::localHostName(),clientName);
-//    chat->show();
-//    connect(this,SIGNAL(exitSignal()),\
-//            chat,SLOT(close()));
-//}
 
 void MainWindow::on_refButton_clicked()
 {
-//    int count = ui->userTableWidget->rowCount();
-//    for ( int i = 0; i<count;++i)
-//         ui->userTableWidget->removeRow(i);
-//    for( int i = 0 ; i < 30 ;i++)
-//    {
-//        sendMessage(NewParticipant);
-//    }
+
 }

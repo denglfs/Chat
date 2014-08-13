@@ -15,6 +15,7 @@ Chat::Chat(QString _IP ,QString _hostName,QWidget *parent) :
     hostName(_hostName)
 {
     ui->setupUi(this);
+    ui->textEdit->installEventFilter(this);
     setWindowTitle(tr("IM:%1,Chating with:%2")\
                    .arg(QHostInfo::localHostName())\
                    .arg(_hostName));
@@ -102,20 +103,29 @@ QString Chat::getIP()
     return 0;
 }
 
-void Chat::on_closeBtn_clicked()
-{
-    this->close();
-}
 void Chat::closeEvent(QCloseEvent *)
 {
     qDebug()<<"exiting .. ";
-    on_closeBtn_clicked();
 }
 void Chat::displayError(QAbstractSocket::SocketError)
 {
-   // QMessageBox::warning(0,tr("connection error"),tr("can't connect to server"),QMessageBox::Ok);
+    // QMessageBox::warning(0,tr("connection error"),tr("can't connect to server"),QMessageBox::Ok);
 }
 void Chat::setSenderSocket(QTcpSocket *socket)
 {
     senderSocket = socket;
+}
+bool Chat::eventFilter(QObject *obj, QEvent *e)
+{
+    Q_ASSERT(obj == ui->textEdit);
+    if (e->type() == QEvent::KeyPress)
+    {
+        QKeyEvent *event = static_cast<QKeyEvent*>(e);
+        if (event->key() == Qt::Key_Return && (event->modifiers() & Qt::ControlModifier))
+        {
+            on_sendBtn_clicked();
+            return true;
+        }
+    }
+    return false;
 }
