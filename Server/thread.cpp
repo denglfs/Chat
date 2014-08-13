@@ -52,6 +52,13 @@ void Thread::on_tcpSocket_readyRead()
         sendMessage(Message,destIP,srcIP,srcHostName,msge);
         break;
     }
+    case BroadCast:
+    {
+        QString msge;
+        in>>msge;
+        sendMessageToallUser(BroadCast,destIP,srcIP,srcHostName,msge);
+        break;
+    }
     default:
         break;
     }
@@ -103,11 +110,19 @@ void Thread::sendUserList(\
     QByteArray data;
     QDataStream  out(&data,QIODevice::WriteOnly);
     out<<type<<srcIP<<srcHostName<<destIP<<IPList<<hostNameList;
-    tcpSocket->write(data);
+    {
+        QMutexLocker locker(mutex);
+        for(int i = 0 ; i< items->size() ;++i)
+        {
+            QTcpSocket * sock = items->at(i).tcpSocket;
+            sock->write(data);
+        }
+    }
 }
 
 void Thread::participantLeft(QString IP)
 {
+    qDebug()<<"quit:"<<IP;
     QMutexLocker locker(mutex);
     //依据IP查找和删除某个用户
     QList<QTableWidgetItem *> tmp = tableWidget->findItems(IP,Qt::MatchExactly);
@@ -116,17 +131,15 @@ void Thread::participantLeft(QString IP)
         int rowNum = tmp.first()->row();
         tableWidget->removeRow(rowNum);
     }
-
     QVector<Item>::iterator it = items->begin();
     for(int index =0; it != items->end() ; ++it,index++)
     {
         if(it->IP == IP)
         {
-            items->removeAt(index);
+            items->remove(index);
             break;
         }
     }
-
 }
 void Thread::sendMessage(\
         MessageType type,\
@@ -161,5 +174,23 @@ void Thread::sendMessage(\
     {
         QMessageBox::warning(0,"","can't find socket");
         //如果没有找到destIP 对应的SOCKET，那么把错误返回给发送者
+    }
+}
+void Thread::sendMessageToallUser(MessageType type, QString destIP, QString srcIP, QString srcHostName, QString msge)
+{
+    QTcpSocket * destSocket = NULL;
+
+    {
+        QMutexLocker locker(mutex);
+        QVector<Item>::iterator it = items->begin();
+        for(; it != items->end() ; ++it)
+        {
+           destSocket = it->tcpSocket;
+           //发送消息
+           QByteArray data;
+           QDataStream  out(&data,QIODevice::WriteOnly);
+           out<<(int)type<<srcIP<<srcHostName<<it->IP<<msge;
+           destSocket->write(data);
+        }
     }
 }

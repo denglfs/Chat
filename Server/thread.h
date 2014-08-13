@@ -5,7 +5,7 @@
 #include <QVector>
 #include <QTableWidget>
 #include <QTcpServer>
-
+#include <QMutex>
 #include "Structor.h"
 
 class Thread:public QThread
@@ -37,6 +37,13 @@ private:
             QString destIP,\
             QString srcIP,\
             QString srcHostName);
+    //发送给所有用户
+    void sendMessageToallUser(\
+            MessageType type,\
+            QString destIP,\
+            QString srcIP,\
+            QString srcHostName,\
+            QString data);
 private slots:
     void on_tcpSocket_readyRead();
 };
