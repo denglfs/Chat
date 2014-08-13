@@ -10,6 +10,7 @@ enum MessageType
     FileName,
     Refuse,
     xChat,
+    BroadCast,
     Error
 };
 

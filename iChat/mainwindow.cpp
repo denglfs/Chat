@@ -16,9 +16,10 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    ui->userTableWidget->setShowGrid(false);
     xsock = new QTcpSocket(this);
-    QString ip = getIP();
-    //QString ip = "192.168.1.100";
+   // QString ip = getIP();
+    QString ip = "192.168.1.100";
     qDebug()<<"ip="<<ip;
     xsock->connectToHost(QHostAddress(ip),5001);
     connect(xsock,SIGNAL(readyRead()),\
@@ -58,6 +59,7 @@ void MainWindow::sendMessage(MessageType type, QString destIP)
     qDebug()<<type<<"+"<<address<<"+"<<localHostName<<"+"<<destIP;
     switch (type)
     {
+    case BroadCast:
     case Message:
     {
         if(ui->messageTextEdit->toPlainText() == "")
@@ -116,6 +118,18 @@ void MainWindow::on_xsock_readyRead()
         ui->messageBrowser->append(re.time);
         break;
     }
+    case BroadCast:
+    {
+        QString message;
+        in>>message;
+        ui->messageBrowser->append("=====================");
+        ui->messageBrowser->append(srcIP);
+        ui->messageBrowser->append(destIP);
+        ui->messageBrowser->append(message);
+        ui->messageBrowser->append(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"));
+        break;
+
+    }
     case NewParticipant:
     {
         QStringList hostNameList;
@@ -129,84 +143,6 @@ void MainWindow::on_xsock_readyRead()
     }
 }
 
-//接收到消息后的处理方式
-void MainWindow::processPendingDatagrams()
-{
-//    while(udpSocket->hasPendingDatagrams())
-//    {
-//        QByteArray datagram;
-//        datagram.resize(udpSocket->pendingDatagramSize());
-//        udpSocket->readDatagram(datagram.data(),datagram.size());
-//        QDataStream in(&datagram,QIODevice::ReadOnly);
-//        int messageType;
-//        in>>messageType;
-//        QString UserName,localHostName,Ipaddress;//对方的：用户名，主机名，本机IP
-//        QString Time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-//        switch (messageType)
-//        {
-//        case Message:
-//        {
-//            QString message;
-//            in>>UserName>>localHostName>>Ipaddress>>message;
-//            if((counter++)%2)
-//                ui->messageBrowser->setTextColor(Qt::blue);
-//            else
-//                ui->messageBrowser->setTextColor(Qt::red);
-//            ui->messageBrowser->setCurrentFont(QFont("Times new Roman",12));
-//            ui->messageBrowser->append("["+localHostName+"]   "+Time);
-//            ui->messageBrowser->append(message);
-//            break;
-//        }
-//         case NewParticipant:
-//            in>>UserName>>localHostName>>Ipaddress;
-//            break;
-//        case ReplyNewParticipant:
-//            in>>UserName>>localHostName>>Ipaddress;
-//            break;
-//        case ParticipantLeft:
-//            in>>UserName>>localHostName;
-//            participantLeft(UserName,localHostName,Time);
-//            break;
-//        case FileName:
-//        {
-//            in>>UserName>>localHostName>>Ipaddress;
-//            QString clientAddress,filename;
-//            in>>clientAddress>>filename;
-//            hasPendingFile(UserName,Ipaddress,clientAddress,filename);
-//            break;
-//        }
-//        case Refuse:
-//        {
-//            in>>UserName>>localHostName;
-//            QString serverAddress;
-//            in>>serverAddress;
-//            QString ipAddress = getIP();
-//            if(ipAddress == serverAddress)
-//            {
-//                server->refused();
-//            }
-//            break;
-//        }
-//        case xChat:
-//        {
-//            in>>UserName>>localHostName>>Ipaddress;
-//            QString clientAddress;
-//            in>>clientAddress;//只有选择的用户才能弹出私聊对话框
-//            if(clientAddress == getIP())
-//            {
-//                Chat * chat = new Chat(NULL);
-//                chat->setPort(port+1);
-//                chat->m_connect(Ipaddress);
-//                chat->setTitle(QHostInfo::localHostName(),localHostName);
-//                chat->show();
-//                connect(this,SIGNAL(exitSignal()) chat,SLOT(close()));
-//            }
-//        }
-//        default:
-//            break;
-//        }
-//    }
-}
 
 void MainWindow::hasPendingFile(QString userName, QString serverAddress, QString clientAddress, QString filename)
 {
@@ -240,6 +176,11 @@ void MainWindow::hasPendingFile(QString userName, QString serverAddress, QString
 
 void MainWindow::newParticipant(QStringList hostNameList, QStringList IPList)
 {
+    //小清空表格
+    int rowcount = ui->userTableWidget->rowCount();
+    for ( int i = 0 ; i< rowcount ;++i)
+        ui->userTableWidget->removeRow(0);
+
     for(int i = 0 ; i < hostNameList.size() ; ++i)
     {
         //更新table widget
@@ -248,6 +189,8 @@ void MainWindow::newParticipant(QStringList hostNameList, QStringList IPList)
         ui->userTableWidget->insertRow(0);
         ui->userTableWidget->setItem(0,0,ip);
         ui->userTableWidget->setItem(0,1,host);
+        ui->userTableWidget->item(0,0)->setTextAlignment(Qt::AlignHCenter);
+        ui->userTableWidget->item(0,1)->setTextAlignment(Qt::AlignHCenter);
     }
 }
 void MainWindow::participantLeft(QString userName, QString localhostName, QString time)
@@ -277,8 +220,6 @@ QString MainWindow::getIP()
 QString MainWindow::getMessaget()
 {
     QString msg = ui->messageTextEdit->toPlainText();
-    ui->messageTextEdit->clear();
-    ui->messageTextEdit->setFocus();
     return msg;
 }
 
@@ -289,7 +230,9 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_sendButton_clicked()
 {
-    sendMessage(Message,getIP());
+    sendMessage(BroadCast,tr("0.0.0.0")); //随便设置一个目的地址，无用地址
+    ui->messageTextEdit->clear();
+    ui->messageTextEdit->setFocus();
 }
 
 void MainWindow::on_sendFileBtn_clicked()
@@ -327,9 +270,9 @@ void MainWindow::on_exitButton_clicked()
     //发送用户离开消息
     QByteArray data;
     QDataStream out(&data,QIODevice::WriteOnly);
-    out<<ParticipantLeft<<getIP()<<QHostInfo::localHostName()<<tr("127.0.0.1");
+    out<<(int)ParticipantLeft<<getIP()<<QHostInfo::localHostName()<<tr("127.0.0.1");
     xsock->write(data);
-
+    qDebug()<<"main quit:"<<getIP();
     this->hide();
     delete server;
     close();

@@ -38,7 +38,6 @@ private:
     Sender * server;
     QVector<Recorder> recoders;
 private slots:
-    void processPendingDatagrams();
     void on_sendButton_clicked();
     void getFileName(QString);
     void on_sendFileBtn_clicked();

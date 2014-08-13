@@ -13,6 +13,12 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
+  <property name="toolTip">
+   <string/>
+  </property>
+  <property name="statusTip">
+   <string/>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout" stretch="10,3,1">
    <item>
     <widget class="QTextBrowser" name="textBrowser">
@@ -21,9 +27,6 @@
      </property>
      <property name="toolTip">
       <string extracomment="Ctrl+Enter 发送"/>
-     </property>
-     <property name="toolTipDuration">
-      <number>1</number>
      </property>
      <property name="statusTip">
       <string comment="enter"/>
@@ -40,9 +43,6 @@
      </property>
      <property name="toolTip">
       <string extracomment="Ctrl+Enter 发送"/>
-     </property>
-     <property name="toolTipDuration">
-      <number>1</number>
      </property>
      <property name="statusTip">
       <string comment="enter"/>
@@ -90,11 +90,8 @@
        <property name="toolTip">
         <string comment="Ctrl+Enter 发送" extracomment="Ctrl+Enter 发送"/>
        </property>
-       <property name="toolTipDuration">
-        <number>1</number>
-       </property>
        <property name="statusTip">
-        <string comment="enter"/>
+        <string/>
        </property>
        <property name="autoFillBackground">
         <bool>false</bool>
