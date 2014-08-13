@@ -26,7 +26,7 @@ private:
     QVector<Item> items;
     QVector<Thread*> threads;
     Thread * thread;
-
+    QMutex mutex;
     int port;
     Ui::MainWindow *ui;
 private slots:

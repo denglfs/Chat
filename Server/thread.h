@@ -12,13 +12,14 @@ class Thread:public QThread
 {
     Q_OBJECT
 public:
-    Thread(QVector<Item> *_items, QTcpServer *tcpserver, QTableWidget *_tableWidget);
+    Thread(QVector<Item> *_items, QTcpServer *tcpserver, QTableWidget *_tableWidget, QMutex *_mutex);
 protected:
     void run();
 private:
     QVector<Item> * items;
     QTcpSocket * tcpSocket;
     QTableWidget * tableWidget;
+    QMutex * mutex;
     //当有新用户加入，更新用户列表
     void newParticipant(QString hostName,QString IP);
     //当有用户离开，更新用户列表

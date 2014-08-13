@@ -16,7 +16,8 @@ MainWindow::MainWindow(QWidget *parent) :
 }
 void MainWindow::on_newConnection()
 {
-    thread = new Thread(&items,tcpServer,ui->tableWidget);
+    qDebug()<<"new connection";
+    thread = new Thread(&items,tcpServer,ui->tableWidget,&mutex);
     if(thread->isRunning() == false)
     {
         thread->start();
