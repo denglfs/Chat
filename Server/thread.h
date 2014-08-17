@@ -16,6 +16,13 @@ public:
 protected:
     void run();
 private:
+    bool bRecvingImage;
+    QByteArray recvedByteAr;
+    int totalBytes;
+    int recedBYtes;
+    QString srcHostName,srcIP,destIP;
+    int msgeType;
+private:
     QVector<Item> * items;
     QTcpSocket * tcpSocket;
     QTableWidget * tableWidget;
@@ -44,6 +51,18 @@ private:
             QString srcIP,\
             QString srcHostName,\
             QString data);
+    void sendImage(\
+            MessageType type,\
+            QString destIP,\
+            QString srcIP,\
+            QString srcHostName,\
+            QByteArray data);
+    void sendImageToallUser(\
+            MessageType type,\
+            QString destIP,\
+            QString srcIP,\
+            QString srcHostName,\
+            QByteArray data);
 private slots:
     void on_tcpSocket_readyRead();
 };

@@ -10,8 +10,10 @@ Thread::Thread(QVector<Item> *_items, QTcpServer * tcpServer, QTableWidget *_tab
 {
     items = _items;
     tcpSocket = tcpServer->nextPendingConnection();
+    tcpSocket->setReadBufferSize(64*1024);
     tableWidget = _tableWidget;
     mutex = _mutex;
+    bRecvingImage = false;
 }
 void Thread::run()
 {
@@ -20,17 +22,35 @@ void Thread::run()
 }
 void Thread::on_tcpSocket_readyRead()
 {
-    QString srcHostName,srcIP,destIP;
-    int msgeType;
+    qDebug()<<"tcp byteAvaiable:"<<tcpSocket->bytesAvailable();
     QByteArray inBlock;
     inBlock = tcpSocket->readAll();
     QDataStream in(&inBlock,QIODevice::ReadOnly);
-    in>>msgeType>>srcIP>>srcHostName>>destIP;
-    qDebug()<<msgeType;
-    qDebug()<<srcIP;
-    qDebug()<<srcHostName;
-    qDebug()<<destIP;
-
+    if(!bRecvingImage)
+    {
+        in>>msgeType>>srcIP>>srcHostName>>destIP;
+        if(msgeType == Image || msgeType == ImageBraodCast)
+        {
+            in>>totalBytes;
+            recedBYtes = 0;
+            bRecvingImage = true;
+            QByteArray tmp;
+            QDataStream out(&tmp,QIODevice::WriteOnly);
+            out<<msgeType<<srcIP<<srcHostName<<destIP<<totalBytes;
+            totalBytes += tmp.size();
+            recvedByteAr.append(inBlock);
+            recedBYtes += inBlock.size();
+            if(recedBYtes < totalBytes)
+                return;
+        }
+    }
+    else
+    {
+        recvedByteAr.append(inBlock);
+        recedBYtes += inBlock.size();
+        if(recedBYtes < totalBytes)
+            return;
+    }
     switch (msgeType)
     {
     case NewParticipant:
@@ -57,6 +77,33 @@ void Thread::on_tcpSocket_readyRead()
         QString msge;
         in>>msge;
         sendMessageToallUser(BroadCast,destIP,srcIP,srcHostName,msge);
+        break;
+    }
+    case Image:
+    {
+        QByteArray data;
+        data.append(recvedByteAr);
+        sendImage(Image,destIP,srcIP,srcHostName,data);
+        qDebug()<<"image send datasize="<<data.size();
+        recvedByteAr.clear();
+        bRecvingImage = false;
+        break;
+    }
+    case ImageBraodCast:
+    {
+        QByteArray data;
+        data.append(recvedByteAr);
+        qDebug()<<"data size = "<<data.size();
+        sendImageToallUser(ImageBraodCast,destIP,srcIP,srcHostName,data);
+        recvedByteAr.clear();
+        bRecvingImage = false;
+        break;
+    }
+    case FileName:
+    {
+        QString fileName;
+        in>>fileName;
+        sendMessage(FileName,destIP,srcIP,srcHostName,fileName);
         break;
     }
     default:
@@ -191,6 +238,44 @@ void Thread::sendMessageToallUser(MessageType type, QString destIP, QString srcI
            QDataStream  out(&data,QIODevice::WriteOnly);
            out<<(int)type<<srcIP<<srcHostName<<it->IP<<msge;
            destSocket->write(data);
+        }
+    }
+}
+void Thread::sendImage(MessageType type, QString destIP, QString srcIP, QString srcHostName, QByteArray _data)
+{
+    QTcpSocket * destSocket = NULL;
+    {
+        QMutexLocker locker(mutex);
+        QVector<Item>::iterator it = items->begin();
+        for(; it != items->end() ; ++it)
+        {
+            if(it->IP == destIP)
+            {
+                destSocket = it->tcpSocket;
+            }
+        }
+    }
+    if(destSocket != NULL)
+    {
+        destSocket->write(_data);
+    }
+    else
+    {
+        QMessageBox::warning(0,"","can't find socket");
+        //如果没有找到destIP 对应的SOCKET，那么把错误返回给发送者
+    }
+}
+void Thread::sendImageToallUser(MessageType type, QString destIP, QString srcIP, QString srcHostName, QByteArray _data)
+{
+    QTcpSocket * destSocket = NULL;
+    {
+        QMutexLocker locker(mutex);
+        QVector<Item>::iterator it = items->begin();
+        for(; it != items->end() ; ++it)
+        {
+            destSocket = it->tcpSocket;
+            destSocket->write(_data);
+            qDebug()<<"broad case :"<<_data.size();
         }
     }
 }
