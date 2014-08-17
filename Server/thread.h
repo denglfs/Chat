@@ -65,6 +65,7 @@ private:
             QByteArray data);
 private slots:
     void on_tcpSocket_readyRead();
+    void on_disconnected_slot();
 };
 
 #endif // THREAD_H

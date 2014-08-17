@@ -13,9 +13,9 @@
 #include <QPixmap>
 #include <QImageReader>
 #include <QFile>
-
-
-
+#include <QTimer>
+#include<QEventLoop>
+#include <QInputDialog>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -25,21 +25,34 @@ MainWindow::MainWindow(QWidget *parent) :
     xCount = 0;
     bRecvingImage = false;
     ui->userTableWidget->setShowGrid(false);
-    xsock = new QTcpSocket(this);
-    QString ip = getIP();
-    //QString ip = "192.168.1.100";
-    qDebug()<<"ip="<<ip;
-    xsock->connectToHost(QHostAddress(ip),5001);
-    connect(xsock,SIGNAL(readyRead()),\
-            this,SLOT(on_xsock_readyRead()));
-    QByteArray data;
-    QDataStream out(&data,QIODevice::WriteOnly);
-    out<<NewParticipant<<getIP()<<QHostInfo::localHostName()<<tr("127.0.0.1");
-    xsock->write(data);
+    ui->messageTextEdit->installEventFilter(this); //安装事件过滤器
     setWindowIcon(QIcon(":/new/prefix1/icon.ico"));
     setWindowTitle("iChat");
+
+    QString ip = getServerIpFromInpuDialog();
+    xsock = new QTcpSocket(this);
+    xsock->connectToHost(QHostAddress(ip),5001);
+
+    sendMessage(NewParticipant,tr("127.0.0.1")); //发送自己到来的消息
+
+    connect(xsock,SIGNAL(readyRead()),\
+            this,SLOT(my_on_xsock_readyRead()));
     connect(ui->userTableWidget,SIGNAL(itemDoubleClicked(QTableWidgetItem*)),\
-            this,SLOT(on_xChat_clicked()));
+            this,SLOT(my_on_xChat_clicked()));
+}
+QString MainWindow::getServerIpFromInpuDialog()
+{
+    bool isOK;
+    QString text = QInputDialog::getText(NULL,\
+                                         "Input Dialog",\
+                                         "Please input server's ip",\
+                                         QLineEdit::Normal,\
+                                         getIP(),\
+                                         &isOK);
+    if(isOK)
+        return text;
+    else
+        exit(0);
 }
 
 //依据发送的消息类型发送数据
@@ -59,19 +72,15 @@ void MainWindow::sendMessage(MessageType type, QString destIP,QByteArray *sendAr
     {
     case BroadCast:
     {
-        if(ui->messageTextEdit->toPlainText() == "")
-        {
-            QMessageBox::warning(0,tr("waring"),tr("must send one word"),QMessageBox::Ok);
-            return;
-        }
         //如果是消息，还要写入发送地址和消息
-        out<<getMessaget();
+        QString msg = getMessaget();
+        if(msg == tr(""))
+            return;
+        out<<msg;
         ui->messageBrowser->verticalScrollBar()->setValue(ui->messageBrowser->verticalScrollBar()->maximum());
         break;
     }
     case NewParticipant:
-        break;
-    case ReplyNewParticipant:
         break;
     case ParticipantLeft:
         break;
@@ -89,6 +98,7 @@ void MainWindow::sendMessage(MessageType type, QString destIP,QByteArray *sendAr
         data.append(*sendAr);
         qDebug()<<"send image:"<<sendAr->size();
         qDebug()<<"send tatal size:"<<data.size();
+        break;
     }
     case Refuse:
         break;
@@ -100,7 +110,7 @@ void MainWindow::sendMessage(MessageType type, QString destIP,QByteArray *sendAr
 
 }
 
-void MainWindow::on_xsock_readyRead()
+void MainWindow::my_on_xsock_readyRead()
 {
     qDebug()<<"ready read";
     QByteArray inBlock;
@@ -141,21 +151,17 @@ void MainWindow::on_xsock_readyRead()
         Recorder re = {Message,srcIP,destIP,message,QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")};
         recoders.push_back(re);
         newMessageSignal(re);
-        ui->messageBrowser->append(srcIP);
-        ui->messageBrowser->append(destIP);
-        ui->messageBrowser->append(message);
-        ui->messageBrowser->append(re.time);
         break;
     }
     case BroadCast:
     {
         QString message;
         in>>message;
-        ui->messageBrowser->append("=====================");
-        ui->messageBrowser->append(srcIP);
-        ui->messageBrowser->append(destIP);
+        ui->messageBrowser->append("===============================================");
+        ui->messageBrowser->append(QString("[%1] [%2]")\
+                                   .arg(srcHostName)\
+                                   .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")));
         ui->messageBrowser->append(message);
-        ui->messageBrowser->append(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"));
         break;
 
     }
@@ -199,6 +205,10 @@ void MainWindow::on_xsock_readyRead()
         file.write(recvedByteAr);
         file.close();
         path = QString("<img src=\"%1\"/>").arg(path);
+        ui->messageBrowser->append("===============================================");
+        ui->messageBrowser->append(QString("[%1] [%2]")\
+                                   .arg(srcHostName)\
+                                   .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")));
         ui->messageBrowser->insertHtml(path);
         ui->messageBrowser->verticalScrollBar()->setValue\
                 (ui->messageBrowser->verticalScrollBar()->maximum());
@@ -211,6 +221,15 @@ void MainWindow::on_xsock_readyRead()
         QString fileName;
         in>>fileName;
         hasPendingFile(srcHostName,srcIP,destIP,fileName);
+        break;
+    }
+    case Refuse:
+    {
+        QString placeHolder;
+        in>>placeHolder;
+        Recorder re = {Refuse,srcIP,destIP,placeHolder,QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")};
+        recoders.push_back(re);
+        newMessageSignal(re);
         break;
     }
     default:
@@ -239,12 +258,14 @@ void MainWindow::hasPendingFile(QString _srcHostName, QString _srcIP, QString _d
         }
         else
         {
+            sendMessage(Refuse,srcIP);
             //添加拒绝接收的代码
         }
 
     }
     if(btn == QMessageBox::No)
     {
+        sendMessage(Refuse,srcIP);
         //添加拒绝接收的代码
     }
 
@@ -268,6 +289,7 @@ void MainWindow::newParticipant(QStringList hostNameList, QStringList IPList)
         ui->userTableWidget->item(0,0)->setTextAlignment(Qt::AlignHCenter);
         ui->userTableWidget->item(0,1)->setTextAlignment(Qt::AlignHCenter);
     }
+    ui->userNumLabel->setText(tr("User Count:%1").arg(hostNameList.size()));
 }
 QString MainWindow::getIP()
 {
@@ -284,12 +306,23 @@ QString MainWindow::getIP()
 //获取消息
 QString MainWindow::getMessaget()
 {
-    QString msg = ui->messageTextEdit->toPlainText();
+    if(ui->messageTextEdit->toPlainText() == "")
+    {
+        QMessageBox::warning(0,tr("waring"),tr("must send one word"),QMessageBox::Ok);
+        return tr("");
+    }
+    QString msg = ui->messageTextEdit->toHtml();
+    if(msg.size() > 4096)
+    {
+        msg = msg.left(4096);
+        QMessageBox::warning(NULL,"waring","too much words",QMessageBox::Ok);
+    }
     return msg;
 }
 
 MainWindow::~MainWindow()
 {
+    qDebug()<<"destrutor";
     delete ui;
 }
 
@@ -300,14 +333,8 @@ void MainWindow::on_sendButton_clicked()
     ui->messageTextEdit->setFocus();
 }
 
-void MainWindow::on_xChat_clicked()
+void MainWindow::my_on_xChat_clicked()
 {
-    qDebug()<<"xxxx";
-    if(ui->userTableWidget->selectedItems().isEmpty())
-    {
-        QMessageBox::warning(0,tr("Select a receiver"),tr("Please select a receiver!"),QMessageBox::Ok);
-        return;
-    }
     int row = ui->userTableWidget->currentRow();
     QString destIP = ui->userTableWidget->item(row,0)->text();
     QString destHostName = ui->userTableWidget->item(row,1)->text();
@@ -321,19 +348,18 @@ void MainWindow::on_xChat_clicked()
 void MainWindow::closeEvent(QCloseEvent *)
 {
     //发送用户离开消息
-    QByteArray data;
-    QDataStream out(&data,QIODevice::WriteOnly);
-    out<<(int)ParticipantLeft<<getIP()<<QHostInfo::localHostName()<<tr("127.0.0.1");
-    xsock->write(data);
-    qDebug()<<"main quit:"<<getIP();
     this->hide();
-    close();
+    sendMessage(ParticipantLeft,tr("127.0.0.1"));
+    QEventLoop eventloop;
+    QTimer::singleShot(2000, &eventloop, SLOT(quit()));
+    eventloop.exec();
+    qDebug()<<"main quit:"<<getIP();
 
 }
 
 void MainWindow::on_refButton_clicked()
 {
-
+    sendMessage(NewParticipant,tr("127.0.0.1")); //发送自己到来的消息,用来获取用户列表
 }
 
 void MainWindow::on_pushButton_clicked()
@@ -350,4 +376,44 @@ void MainWindow::on_pushButton_clicked()
     tmp.append(imageAr);
     sendMessage(ImageBraodCast,getIP(),&tmp);
 
+}
+
+void MainWindow::on_fontComboBox_currentFontChanged(const QFont &f)
+{
+    ui->messageTextEdit->setCurrentFont(f);
+    ui->messageTextEdit->setFocus();
+}
+
+void MainWindow::on_spinBox_valueChanged(int arg1)
+{
+    ui->messageTextEdit->setFontPointSize(arg1*1.0);
+    ui->messageTextEdit->setFocus();
+}
+
+
+void MainWindow::on_comboBox_currentIndexChanged(const QString &arg1)
+{
+    if( tr("red") == arg1)
+        ui->messageTextEdit->setTextColor(Qt::red);
+    if( tr("blue") == arg1)
+        ui->messageTextEdit->setTextColor(Qt::blue);
+    if(  tr("black") == arg1)
+        ui->messageTextEdit->setTextColor(Qt::black);
+    if( tr("green") == arg1)
+        ui->messageTextEdit->setTextColor(Qt::green);
+    ui->messageTextEdit->setFocus();
+}
+bool MainWindow::eventFilter(QObject *obj, QEvent *e)
+{
+    Q_ASSERT(obj == ui->messageTextEdit);
+    if (e->type() == QEvent::KeyPress)
+    {
+        QKeyEvent *event = static_cast<QKeyEvent*>(e);
+        if (event->key() == Qt::Key_Return && (event->modifiers() & Qt::ControlModifier))
+        {
+            on_sendButton_clicked();
+            return true;
+        }
+    }
+    return false;
 }

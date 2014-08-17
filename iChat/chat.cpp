@@ -8,7 +8,7 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QFileDialog>
-
+#include <QScrollBar>
 #include "Structor.h"
 
 Chat::Chat(QString _IP ,QString _hostName,QWidget *parent) :
@@ -35,14 +35,20 @@ void Chat::readMessage(Recorder _recoders)
 {
     qDebug()<<"read message"<<endl;
     ui->textBrowser->setCurrentFont(QFont("Times new Roman",12));
-    ui->textBrowser->append(tr("[%1] [%2]\n")\
+    ui->textBrowser->append(tr("[%1] [%2]")\
                             .arg(_recoders.srcIP)
                             .arg(_recoders.time));
     if(_recoders.type == Image)
         ui->textBrowser->insertHtml(_recoders.data);
     if(_recoders.type == Message)
         ui->textBrowser->append(_recoders.data);
+    if(_recoders.type == Refuse)
+    {
+        sender->refused();
+    }
     ui->textEdit->setFocus();
+    ui->textBrowser->verticalScrollBar()->setValue\
+            (ui->textBrowser->verticalScrollBar()->maximum());
 
 }
 void Chat::readRecoder(QVector<Recorder> *_recoders)
@@ -72,11 +78,11 @@ void Chat::on_sendBtn_clicked()
     QByteArray data;
     QDataStream  out(&data,QIODevice::WriteOnly);
     //主机名，IP
-    QString msg = ui->textEdit->toPlainText();
+    QString msg = ui->textEdit->toHtml();
     if(msg.size() > 4096)
     {
-        QMessageBox::warning(0,tr("waring"),tr("most 4096 words"),QMessageBox::Ok);
-        return;
+        QMessageBox::warning(0,tr("waring"),tr("too much words"),QMessageBox::Ok);
+        msg = msg.left(4096);
     }
     out<<(int)Message<<getIP()<<QHostInfo::localHostName()<<IP<<msg;
     if(senderSocket)
@@ -89,10 +95,10 @@ void Chat::on_sendBtn_clicked()
 
     //更新自己的面板，将自己发送的消息打印在上面
     ui->textBrowser->setCurrentFont(QFont("Times new Roman",12));
-    ui->textBrowser->append(tr("[%1] [%2]\n")\
+    ui->textBrowser->append(tr("[%1] [%2]")\
                             .arg(getIP())
                             .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:dd")));
-    ui->textBrowser->append(ui->textEdit->toPlainText());
+    ui->textBrowser->append(ui->textEdit->toHtml());
     ui->textEdit->clear();
     ui->textEdit->setFocus();
 
@@ -153,31 +159,31 @@ void Chat::sendImage(QByteArray *_data)
 
 void Chat::on_pushButton_clicked()
 {
-        QByteArray imageAr;
-        QString path = QFileDialog::getOpenFileName(this,\
+    QByteArray imageAr;
+    QString path = QFileDialog::getOpenFileName(this,\
                                                 tr("Open Image"),"", tr("Image Files (*.png *.jpg *.bmp)"));
-        QFile imageFile(path);
-        imageFile.open(QIODevice::ReadOnly);
-        imageAr=imageFile.readAll();
-        QByteArray tmp;
-        QDataStream out(&tmp,QIODevice::WriteOnly);
-        out<<(int)imageAr.size();
-        tmp.append(imageAr);
-        sendImage(&tmp);
+    QFile imageFile(path);
+    imageFile.open(QIODevice::ReadOnly);
+    imageAr=imageFile.readAll();
+    QByteArray tmp;
+    QDataStream out(&tmp,QIODevice::WriteOnly);
+    out<<(int)imageAr.size();
+    tmp.append(imageAr);
+    sendImage(&tmp);
 
-        //加入聊天记录
-        path = QString("<img src=\"%1\"/>").arg(path);
-        Recorder re ={Image,getIP(),IP,path,\
-                      QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")};
-        recoders->push_back(re);
-        //更新自己的面板，将自己发送的图片打印在上面
-        ui->textBrowser->setCurrentFont(QFont("Times new Roman",12));
-        ui->textBrowser->append(tr("[%1] [%2]\n")\
-                                .arg(getIP())
-                                .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:dd")));
-        ui->textBrowser->insertHtml(path);
-        ui->textEdit->clear();
-        ui->textEdit->setFocus();
+    //加入聊天记录
+    path = QString("<img src=\"%1\"/>").arg(path);
+    Recorder re ={Image,getIP(),IP,path,\
+                  QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")};
+    recoders->push_back(re);
+    //更新自己的面板，将自己发送的图片打印在上面
+    ui->textBrowser->setCurrentFont(QFont("Times new Roman",12));
+    ui->textBrowser->append(tr("[%1] [%2]")\
+                            .arg(getIP())
+                            .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:dd")));
+    ui->textBrowser->insertHtml(path);
+    ui->textEdit->clear();
+    ui->textEdit->setFocus();
 }
 
 void Chat::on_sendFileButton_clicked()
@@ -198,4 +204,30 @@ void Chat::sendFileName(QString fileName)
         senderSocket->write(data);
     }
 
+}
+
+void Chat::on_spinBox_valueChanged(int arg1)
+{
+    ui->textEdit->setFontPointSize(arg1*1.0);
+    ui->textEdit->setFocus();
+}
+
+void Chat::on_comboBox_currentIndexChanged(const QString &arg1)
+{
+
+    if( tr("red") == arg1)
+        ui->textEdit->setTextColor(Qt::red);
+    if( tr("blue") == arg1)
+        ui->textEdit->setTextColor(Qt::blue);
+    if(  tr("black") == arg1)
+        ui->textEdit->setTextColor(Qt::black);
+    if( tr("green") == arg1)
+        ui->textEdit->setTextColor(Qt::green);
+    ui->textEdit->setFocus();
+}
+
+void Chat::on_fontComboBox_currentFontChanged(const QFont &f)
+{
+    ui->textEdit->setCurrentFont(f);
+    ui->textEdit->setFocus();
 }

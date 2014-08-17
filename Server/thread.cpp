@@ -19,7 +19,16 @@ void Thread::run()
 {
     connect(tcpSocket,SIGNAL(readyRead()),\
             this,SLOT(on_tcpSocket_readyRead()));
+    connect(tcpSocket,SIGNAL(disconnected()),\
+            this,SLOT(on_disconnected_slot()));
 }
+void Thread::on_disconnected_slot()
+{
+    qDebug()<<"quit";
+    tcpSocket->close();
+    this->quit();
+}
+
 void Thread::on_tcpSocket_readyRead()
 {
     qDebug()<<"tcp byteAvaiable:"<<tcpSocket->bytesAvailable();
@@ -106,6 +115,11 @@ void Thread::on_tcpSocket_readyRead()
         sendMessage(FileName,destIP,srcIP,srcHostName,fileName);
         break;
     }
+    case Refuse:
+    {
+        sendMessage(Refuse,destIP,srcIP,srcHostName,tr("refuse"));
+        break;
+    }
     default:
         break;
     }
@@ -170,21 +184,23 @@ void Thread::sendUserList(\
 void Thread::participantLeft(QString IP)
 {
     qDebug()<<"quit:"<<IP;
-    QMutexLocker locker(mutex);
-    //依据IP查找和删除某个用户
-    QList<QTableWidgetItem *> tmp = tableWidget->findItems(IP,Qt::MatchExactly);
-    if (tmp.isEmpty() == false)
     {
-        int rowNum = tmp.first()->row();
-        tableWidget->removeRow(rowNum);
-    }
-    QVector<Item>::iterator it = items->begin();
-    for(int index =0; it != items->end() ; ++it,index++)
-    {
-        if(it->IP == IP)
+        QMutexLocker locker(mutex);
+        //依据IP查找和删除某个用户
+        QList<QTableWidgetItem *> tmp = tableWidget->findItems(IP,Qt::MatchExactly);
+        if (tmp.isEmpty() == false)
         {
-            items->remove(index);
-            break;
+            int rowNum = tmp.first()->row();
+            tableWidget->removeRow(rowNum);
+        }
+        QVector<Item>::iterator it = items->begin();
+        for(int index =0; it != items->end() ; ++it,index++)
+        {
+            if(it->IP == IP)
+            {
+                items->remove(index);
+                break;
+            }
         }
     }
 }

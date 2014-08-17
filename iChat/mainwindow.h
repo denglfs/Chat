@@ -28,6 +28,7 @@ protected:
     void sendMessage(MessageType type , QString serverAddress="", QByteArray *sendAr =NULL);
     QString getIP();
     QString getMessaget();
+    QString getServerIpFromInpuDialog();
     void hasPendingFile(QString _srcHostName, QString _srcIP, QString _destIP, QString _fileName);
 private:
     bool bRecvingImage;
@@ -43,12 +44,17 @@ private:
     qint16 port;
     QString filename;
     QVector<Recorder> recoders;
-private slots:
+    bool eventFilter(QObject *obj, QEvent *e);
+public slots:
+    void my_on_xsock_readyRead();
+    void my_on_xChat_clicked();
     void on_sendButton_clicked();
-    void on_xChat_clicked();
     void on_refButton_clicked();
-    void on_xsock_readyRead();
     void on_pushButton_clicked();
+    void on_fontComboBox_currentFontChanged(const QFont &f);
+    void on_spinBox_valueChanged(int arg1);
+    void on_comboBox_currentIndexChanged(const QString &arg1);
+
 signals:
     void newMessageSignal(Recorder  _recoders);
 };

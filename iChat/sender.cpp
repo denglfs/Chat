@@ -146,5 +146,5 @@ void Sender::on_serverCloseBtn_clicked()
 void Sender::refused()
 {
     tcpServer->close();
-    ui->label->setText("receiver refuse!");
+    ui->label->setText("receiver refused!");
 }

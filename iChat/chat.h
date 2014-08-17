@@ -33,6 +33,8 @@ private:
     Sender * sender;
     QString getIP();
     void sendImage(QByteArray * data);
+    void stringToHtmlFilter(QString &str);
+
     void closeEvent(QCloseEvent *);
     bool eventFilter(QObject *obj, QEvent *e);
 private slots:
@@ -41,6 +43,12 @@ private slots:
     void on_pushButton_clicked();
     void on_sendFileButton_clicked();
     void sendFileName(QString fileName);
+    void on_spinBox_valueChanged(int arg1);
+
+    void on_comboBox_currentIndexChanged(const QString &arg1);
+
+    void on_fontComboBox_currentFontChanged(const QFont &f);
+
 public slots:
     void readMessage(Recorder _recoders);
 
