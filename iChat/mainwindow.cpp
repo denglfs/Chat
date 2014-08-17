@@ -9,6 +9,12 @@
 #include <QUdpSocket>
 #include <QMessageBox>
 #include <QHostAddress>
+#include <QBuffer>
+#include <QPixmap>
+#include <QImageReader>
+#include <QFile>
+
+
 
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -16,10 +22,12 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    xCount = 0;
+    bRecvingImage = false;
     ui->userTableWidget->setShowGrid(false);
     xsock = new QTcpSocket(this);
-   // QString ip = getIP();
-    QString ip = "192.168.1.100";
+    QString ip = getIP();
+    //QString ip = "192.168.1.100";
     qDebug()<<"ip="<<ip;
     xsock->connectToHost(QHostAddress(ip),5001);
     connect(xsock,SIGNAL(readyRead()),\
@@ -30,22 +38,12 @@ MainWindow::MainWindow(QWidget *parent) :
     xsock->write(data);
     setWindowIcon(QIcon(":/new/prefix1/icon.ico"));
     setWindowTitle("iChat");
-
-    server = new Sender();
-    connect(server,SIGNAL(sendFileName(QString)),\
-            this,SLOT(getFileName(QString)));
     connect(ui->userTableWidget,SIGNAL(itemDoubleClicked(QTableWidgetItem*)),\
             this,SLOT(on_xChat_clicked()));
 }
 
-void MainWindow::getFileName(QString name)
-{
-    filename = name;
-    sendMessage(FileName);
-}
-
 //依据发送的消息类型发送数据
-void MainWindow::sendMessage(MessageType type, QString destIP)
+void MainWindow::sendMessage(MessageType type, QString destIP,QByteArray *sendAr)
 {
     QByteArray data;
     //将data绑定到数据流
@@ -60,7 +58,6 @@ void MainWindow::sendMessage(MessageType type, QString destIP)
     switch (type)
     {
     case BroadCast:
-    case Message:
     {
         if(ui->messageTextEdit->toPlainText() == "")
         {
@@ -78,12 +75,20 @@ void MainWindow::sendMessage(MessageType type, QString destIP)
         break;
     case ParticipantLeft:
         break;
-    case FileName:
+    case Image:
     {
-        int row = ui->userTableWidget->currentRow();
-        QString clientAddress = ui->userTableWidget->item(row,2)->text();
-        out<<address<<clientAddress<<filename;
+        qDebug()<<"send preFix:"<<data.size();
+        data.append(*sendAr);
+        qDebug()<<"send image:"<<sendAr->size();
+        qDebug()<<"send tatal size:"<<data.size();
         break;
+    }
+    case ImageBraodCast:
+    {
+        qDebug()<<"send preFix:"<<data.size();
+        data.append(*sendAr);
+        qDebug()<<"send image:"<<sendAr->size();
+        qDebug()<<"send tatal size:"<<data.size();
     }
     case Refuse:
         break;
@@ -98,10 +103,34 @@ void MainWindow::sendMessage(MessageType type, QString destIP)
 void MainWindow::on_xsock_readyRead()
 {
     qDebug()<<"ready read";
-    QDataStream in(xsock);
-    int msgeType;
-    QString srcIP,srcHostName,destIP;
-    in>>msgeType>>srcIP>>srcHostName>>destIP;
+    QByteArray inBlock;
+    inBlock=xsock->readAll();
+    QDataStream in(&inBlock,QIODevice::ReadOnly);
+    if(!bRecvingImage)
+    {
+        in>>msgeType>>srcIP>>srcHostName>>destIP;
+        if(msgeType == Image || msgeType == ImageBraodCast)
+        {
+            in>>totalBytes;
+            recedBYtes = 0;
+            bRecvingImage = true;
+            QByteArray tmp;
+            QDataStream out(&tmp,QIODevice::WriteOnly);
+            out<<msgeType<<srcIP<<srcHostName<<destIP<<totalBytes;
+            inBlock.remove(0,tmp.size());
+            recvedByteAr.append(inBlock);
+            recedBYtes += inBlock.size();
+            if(recedBYtes < totalBytes)
+                return;
+        }
+    }
+    else
+    {
+        recvedByteAr.append(inBlock);
+        recedBYtes += inBlock.size();
+        if(recedBYtes < totalBytes)
+            return;
+    }
 
     switch (msgeType)
     {
@@ -138,40 +167,87 @@ void MainWindow::on_xsock_readyRead()
         newParticipant(hostNameList,IPList);
         break;
     }
+    case Image:
+    {
+       // QByteArray data = xsock->read(8192);
+        //保存文件
+        QString path = tr("%1").arg(xCount++);
+        QFile file(path);
+        file.resize(0);
+        file.open(QIODevice::WriteOnly);
+        file.resize(0);
+        file.write(recvedByteAr);
+        file.close();
+        //通知给chat
+        path = QString("<img src=\"%1\"/>").arg(path);
+        Recorder re = {Image,srcIP,destIP,path,QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")};
+        recoders.push_back(re);
+        newMessageSignal(re);
+        recvedByteAr.clear();
+        bRecvingImage = false;
+        break;
+    }
+    case ImageBraodCast:
+    {
+        //QByteArray data = xsock->read(8192);
+        //保存文件
+        QString path = tr("%1").arg(xCount++);
+        QFile file(path);
+        file.resize(0);
+        file.open(QIODevice::WriteOnly);
+        file.resize(0);
+        file.write(recvedByteAr);
+        file.close();
+        path = QString("<img src=\"%1\"/>").arg(path);
+        ui->messageBrowser->insertHtml(path);
+        ui->messageBrowser->verticalScrollBar()->setValue\
+                (ui->messageBrowser->verticalScrollBar()->maximum());
+        recvedByteAr.clear();
+        bRecvingImage = false;
+        break;
+    }
+    case FileName:
+    {
+        QString fileName;
+        in>>fileName;
+        hasPendingFile(srcHostName,srcIP,destIP,fileName);
+        break;
+    }
     default:
         break;
     }
 }
 
 
-void MainWindow::hasPendingFile(QString userName, QString serverAddress, QString clientAddress, QString filename)
+void MainWindow::hasPendingFile(QString _srcHostName, QString _srcIP, QString _destIP, QString _fileName)
 {
-    QString ipAddress = getIP();
-    if(ipAddress == clientAddress)
-    {
-        int btn = QMessageBox::information(this,tr("Receive File"),tr("Save the file?"),QMessageBox::Yes,QMessageBox::No);
-        if(btn == QMessageBox::Yes)
-        {
-            //获取要保存的文件名
-            QString name = QFileDialog::getSaveFileName(0,tr("Save"),filename);
-            if( !name.isEmpty())
-            {
-                receiver * client = new receiver(this);
-                client->setFileName(name);
-                client->setHostAddress(QHostAddress(serverAddress));
-                client->show();
-            }
-            else
-            {
-                sendMessage(Refuse,serverAddress);
-            }
 
-        }
-        if(btn == QMessageBox::No)
+    int btn = QMessageBox::information(this,\
+                                       tr("Receive File"),\
+                                       tr("Save the file?"),\
+                                       QMessageBox::Yes,QMessageBox::No);
+    if(btn == QMessageBox::Yes)
+    {
+        //获取要保存的文件名
+        QString name = QFileDialog::getSaveFileName(0,tr("Save"),_fileName);
+        if( !name.isEmpty())
         {
-            sendMessage(Refuse,serverAddress);
+            receiver * client = new receiver(this);
+            client->setFileName(name);
+            client->setHostAddress(QHostAddress(_srcIP));
+            client->show();
         }
+        else
+        {
+            //添加拒绝接收的代码
+        }
+
     }
+    if(btn == QMessageBox::No)
+    {
+        //添加拒绝接收的代码
+    }
+
 }
 
 void MainWindow::newParticipant(QStringList hostNameList, QStringList IPList)
@@ -191,17 +267,6 @@ void MainWindow::newParticipant(QStringList hostNameList, QStringList IPList)
         ui->userTableWidget->setItem(0,1,host);
         ui->userTableWidget->item(0,0)->setTextAlignment(Qt::AlignHCenter);
         ui->userTableWidget->item(0,1)->setTextAlignment(Qt::AlignHCenter);
-    }
-}
-void MainWindow::participantLeft(QString userName, QString localhostName, QString time)
-{
-    QList<QTableWidgetItem *> tmp = ui->userTableWidget->findItems(localhostName,Qt::MatchExactly);
-    if (tmp.isEmpty() == false)
-    {
-        int rowNum = tmp.first()->row();
-        qDebug()<<"rowNum = "<<rowNum;
-        ui->userTableWidget->removeRow(rowNum);
-        ui->userNumLabel->setText(tr("onlines:%1").arg(ui->userTableWidget->rowCount()));
     }
 }
 QString MainWindow::getIP()
@@ -235,17 +300,6 @@ void MainWindow::on_sendButton_clicked()
     ui->messageTextEdit->setFocus();
 }
 
-void MainWindow::on_sendFileBtn_clicked()
-{
-    if(ui->userTableWidget->selectedItems().isEmpty())
-    {
-        QMessageBox::warning(0,tr("Select a receiver"),tr("Please select a receiver!"),QMessageBox::Ok);
-        return;
-    }
-    server->show();
-    server->initServer();
-}
-
 void MainWindow::on_xChat_clicked()
 {
     qDebug()<<"xxxx";
@@ -264,8 +318,7 @@ void MainWindow::on_xChat_clicked()
     xchat->setSenderSocket(xsock);
     xchat->show();
 }
-
-void MainWindow::on_exitButton_clicked()
+void MainWindow::closeEvent(QCloseEvent *)
 {
     //发送用户离开消息
     QByteArray data;
@@ -274,16 +327,27 @@ void MainWindow::on_exitButton_clicked()
     xsock->write(data);
     qDebug()<<"main quit:"<<getIP();
     this->hide();
-    delete server;
     close();
-}
-void MainWindow::closeEvent(QCloseEvent *)
-{
-    on_exitButton_clicked();
 
 }
 
 void MainWindow::on_refButton_clicked()
 {
+
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+    QString fileName =\
+            QFileDialog::getOpenFileName(this,\
+                                         tr("Open Image"),"", tr("Image Files (*.png *.jpg *.bmp)"));
+    QFile imageFile(fileName);
+    imageFile.open(QIODevice::ReadOnly);
+    QByteArray imageAr=imageFile.readAll();
+    QByteArray tmp;
+    QDataStream out(&tmp,QIODevice::WriteOnly);
+    out<<(int)imageAr.size();
+    tmp.append(imageAr);
+    sendMessage(ImageBraodCast,getIP(),&tmp);
 
 }

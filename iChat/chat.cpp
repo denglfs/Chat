@@ -6,6 +6,9 @@
 #include <QHostInfo>
 #include <QDateTime>
 #include <QMessageBox>
+#include <QFile>
+#include <QFileDialog>
+
 #include "Structor.h"
 
 Chat::Chat(QString _IP ,QString _hostName,QWidget *parent) :
@@ -20,6 +23,7 @@ Chat::Chat(QString _IP ,QString _hostName,QWidget *parent) :
                    .arg(QHostInfo::localHostName())\
                    .arg(_hostName));
     senderSocket  = NULL;
+    sender = new Sender(NULL);
 }
 
 Chat::~Chat()
@@ -31,10 +35,13 @@ void Chat::readMessage(Recorder _recoders)
 {
     qDebug()<<"read message"<<endl;
     ui->textBrowser->setCurrentFont(QFont("Times new Roman",12));
-    ui->textBrowser->append(tr("[%1] [%2]")\
+    ui->textBrowser->append(tr("[%1] [%2]\n")\
                             .arg(_recoders.srcIP)
                             .arg(_recoders.time));
-    ui->textBrowser->append(_recoders.data);
+    if(_recoders.type == Image)
+        ui->textBrowser->insertHtml(_recoders.data);
+    if(_recoders.type == Message)
+        ui->textBrowser->append(_recoders.data);
     ui->textEdit->setFocus();
 
 }
@@ -82,7 +89,7 @@ void Chat::on_sendBtn_clicked()
 
     //更新自己的面板，将自己发送的消息打印在上面
     ui->textBrowser->setCurrentFont(QFont("Times new Roman",12));
-    ui->textBrowser->append(tr("[%1] [%2]")\
+    ui->textBrowser->append(tr("[%1] [%2]\n")\
                             .arg(getIP())
                             .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:dd")));
     ui->textBrowser->append(ui->textEdit->toPlainText());
@@ -128,4 +135,67 @@ bool Chat::eventFilter(QObject *obj, QEvent *e)
         }
     }
     return false;
+}
+void Chat::sendImage(QByteArray *_data)
+{
+    QByteArray data;
+    QDataStream  out(&data,QIODevice::WriteOnly);
+    out<<(int)Image<<getIP()<<QHostInfo::localHostName()<<IP;
+    data.append(*_data);
+    qDebug()<<"caht data size"<<data.size();
+    if(senderSocket)
+    {
+        qDebug()<<"server";
+        senderSocket->write(data);
+    }
+
+}
+
+void Chat::on_pushButton_clicked()
+{
+        QByteArray imageAr;
+        QString path = QFileDialog::getOpenFileName(this,\
+                                                tr("Open Image"),"", tr("Image Files (*.png *.jpg *.bmp)"));
+        QFile imageFile(path);
+        imageFile.open(QIODevice::ReadOnly);
+        imageAr=imageFile.readAll();
+        QByteArray tmp;
+        QDataStream out(&tmp,QIODevice::WriteOnly);
+        out<<(int)imageAr.size();
+        tmp.append(imageAr);
+        sendImage(&tmp);
+
+        //加入聊天记录
+        path = QString("<img src=\"%1\"/>").arg(path);
+        Recorder re ={Image,getIP(),IP,path,\
+                      QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")};
+        recoders->push_back(re);
+        //更新自己的面板，将自己发送的图片打印在上面
+        ui->textBrowser->setCurrentFont(QFont("Times new Roman",12));
+        ui->textBrowser->append(tr("[%1] [%2]\n")\
+                                .arg(getIP())
+                                .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:dd")));
+        ui->textBrowser->insertHtml(path);
+        ui->textEdit->clear();
+        ui->textEdit->setFocus();
+}
+
+void Chat::on_sendFileButton_clicked()
+{
+    sender->show();
+    sender->initServer();
+    connect(sender,SIGNAL(sendFileName(QString)),\
+            this,SLOT(sendFileName(QString)));
+}
+void Chat::sendFileName(QString fileName)
+{
+    QByteArray data;
+    QDataStream  out(&data,QIODevice::WriteOnly);
+    out<<(int)FileName<<getIP()<<QHostInfo::localHostName()<<IP<<fileName;
+    if(senderSocket)
+    {
+        qDebug()<<"server";
+        senderSocket->write(data);
+    }
+
 }

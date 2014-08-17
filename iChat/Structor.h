@@ -11,6 +11,8 @@ enum MessageType
     Refuse,
     xChat,
     BroadCast,
+    Image,
+    ImageBraodCast,
     Error
 };
 

@@ -8,6 +8,8 @@
 #include <QDateTime>
 #include <QKeyEvent>
 #include "Structor.h"
+#include "sender.h"
+
 
 namespace Ui {
 class Chat;
@@ -28,14 +30,20 @@ private:
     QString IP;
     QTcpSocket * senderSocket;
     QVector<Recorder> *recoders;
+    Sender * sender;
     QString getIP();
+    void sendImage(QByteArray * data);
     void closeEvent(QCloseEvent *);
     bool eventFilter(QObject *obj, QEvent *e);
 private slots:
     void on_sendBtn_clicked();
     void displayError (QAbstractSocket::SocketError);
+    void on_pushButton_clicked();
+    void on_sendFileButton_clicked();
+    void sendFileName(QString fileName);
 public slots:
     void readMessage(Recorder _recoders);
+
 };
 
 #endif // CHAT_H

@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QUdpSocket>
+#include <QFile>
 #include "sender.h"
 #include "receiver.h"
 #include "chat.h"
@@ -20,32 +21,34 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = 0);
+    unsigned xCount;
     ~MainWindow();
 protected:
     void newParticipant(QStringList hostNameList, QStringList IPList);
-    void participantLeft(QString userName,QString localhostName,QString time);
-    void sendMessage(MessageType type ,QString serverAddress="");
+    void sendMessage(MessageType type , QString serverAddress="", QByteArray *sendAr =NULL);
     QString getIP();
     QString getMessaget();
-    void hasPendingFile(QString userName,QString serverAddress,QString clientAddress,QString filename);
-
+    void hasPendingFile(QString _srcHostName, QString _srcIP, QString _destIP, QString _fileName);
+private:
+    bool bRecvingImage;
+    QByteArray recvedByteAr;
+    int totalBytes;
+    int recedBYtes;
+    int msgeType;
+    QString srcIP,srcHostName,destIP;
 private:
     QTcpSocket * xsock;
     void closeEvent(QCloseEvent *);
     Ui::MainWindow *ui;
     qint16 port;
     QString filename;
-    Sender * server;
     QVector<Recorder> recoders;
 private slots:
     void on_sendButton_clicked();
-    void getFileName(QString);
-    void on_sendFileBtn_clicked();
     void on_xChat_clicked();
-    void on_exitButton_clicked();
     void on_refButton_clicked();
     void on_xsock_readyRead();
-
+    void on_pushButton_clicked();
 signals:
     void newMessageSignal(Recorder  _recoders);
 };
