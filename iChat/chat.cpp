@@ -106,13 +106,22 @@ void Chat::on_sendBtn_clicked()
 }
 QString Chat::getIP()
 {
-    QList<QHostAddress> list = QNetworkInterface::allAddresses();
-    foreach (QHostAddress address, list)
+    QString localHostName = QHostInfo::localHostName();
+
+    qDebug() <<"localHostName:"<<localHostName;
+    QHostInfo info = QHostInfo::fromName(localHostName);
+    foreach(QHostAddress address,info.addresses())
     {
         if(address.protocol() == QAbstractSocket::IPv4Protocol)
-            return address.toString();
-
+            return  address.toString();
     }
+//    QList<QHostAddress> list = QNetworkInterface::allAddresses();
+//    foreach (QHostAddress address, list)
+//    {
+//        if(address.protocol() == QAbstractSocket::IPv4Protocol)
+//            return address.toString();
+
+//    }
     return 0;
 }
 

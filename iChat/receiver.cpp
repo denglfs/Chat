@@ -34,6 +34,7 @@ void receiver::newConnect()
     blockSize = 0;
     tcpClient->abort();
     tcpClient->connectToHost(hostAddress,tcpProt);
+    qDebug()<<"receiver:"<<hostAddress<<":"<<tcpProt;
     time.start();
 }
 void receiver::readMessage()
